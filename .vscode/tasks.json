@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build page",
+      "type": "shell",
+      "command": "python3 scripts/build.py",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Serve at http://localhost:8765",
+      "type": "shell",
+      "command": "python3 -m http.server 8765 --bind 127.0.0.1 --directory docs",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Export data (fast, needs PyTorch)",
+      "type": "shell",
+      "command": "/opt/anaconda3/envs/gnn_traffic/bin/python scripts/export_data.py",
+      "options": { "cwd": "${workspaceFolder}", "env": { "GWNET_REPO": "${env:HOME}/PycharmProjects/Graph-WaveNet" } },
+      "problemMatcher": []
+    },
+    {
+      "label": "Export data (full test set, slow)",
+      "type": "shell",
+      "command": "/opt/anaconda3/envs/gnn_traffic/bin/python scripts/export_data.py --full",
+      "options": { "cwd": "${workspaceFolder}", "env": { "GWNET_REPO": "${env:HOME}/PycharmProjects/Graph-WaveNet" } },
+      "problemMatcher": []
+    }
+  ]
+}

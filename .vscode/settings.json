@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "/opt/anaconda3/bin/python",
+  "files.exclude": { "**/__pycache__": true, "**/.DS_Store": true },
+  "files.associations": { "*.html": "html" },
+  "editor.formatOnSave": false
+}

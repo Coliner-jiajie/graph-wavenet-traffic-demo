@@ -1,0 +1,266 @@
+<title>LA Traffic Forecast Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a control rail beside one large time-series chart, then three small readouts underneath. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --fg: #16202b;
+  --muted: #5c6b7a;
+  --line: #d5dce3;
+  --grid: #e6ebf0;
+  --actual: #1b2733;
+  --pred: #0b6bcb;
+  --masked: #d4540a;
+  --good: #1f8a4c;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151c; --surface: #17202a; --fg: #e6ecf2; --muted: #93a2b1; --line: #2a3745; --grid: #202c38;
+    --actual: #e6ecf2; --pred: #58a6ff; --masked: #ff9a57; --good: #4cc482; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151c; --surface: #17202a; --fg: #e6ecf2; --muted: #93a2b1; --line: #2a3745; --grid: #202c38;
+  --actual: #e6ecf2; --pred: #58a6ff; --masked: #ff9a57; --good: #4cc482; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); max-width: 70ch; margin: 4px 0 0; }
+.main { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
+.rail { display: flex; flex-direction: column; gap: 18px; }
+label.f { display: flex; flex-direction: column; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+select, input[type=range] { width: 100%; font: inherit; color: var(--fg); }
+select { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font-size: 14px; text-transform: none; letter-spacing: 0; }
+input[type=range] { accent-color: var(--masked); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { flex: 1; font: inherit; font-size: 13px; padding: 7px 4px; background: var(--bg); color: var(--fg); border: 0; border-right: 1px solid var(--line); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--pred); color: #fff; }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { color: #0b1117; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button[aria-pressed="true"] { color: #0b1117; } }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--pred); outline-offset: 2px; }
+.val { font-family: var(--font-mono); font-size: 13px; color: var(--fg); text-transform: none; letter-spacing: 0; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.chartbox { display: flex; flex-direction: column; gap: 10px; }
+.chartbar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; justify-content: space-between; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid; vertical-align: middle; margin-right: 6px; }
+#chart { width: 100%; display: block; touch-action: none; }
+.readout { font-family: var(--font-mono); font-size: 13px; min-height: 20px; color: var(--muted); }
+.readout b { color: var(--fg); font-weight: 500; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 820px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; margin: 0 0 8px; }
+.big { font-family: var(--font-mono); font-size: 28px; font-weight: 500; line-height: 1.1; }
+.big small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+td, th { padding: 5px 0; text-align: left; font-weight: 400; border-bottom: 1px solid var(--grid); }
+td:last-child, th:last-child { text-align: right; font-family: var(--font-mono); }
+.bar { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.bar > span { display: block; height: 100%; background: var(--pred); }
+#bars { display: flex; flex-direction: column; gap: 6px; }
+.brow { display: grid; grid-template-columns: 38px minmax(0,1fr) 44px; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: 12px; }
+.brow .t { height: 10px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.brow .t span { display: block; height: 100%; background: var(--muted); }
+.brow.on .t span { background: var(--masked); }
+.brow.on { color: var(--fg); font-weight: 500; }
+footer { color: var(--muted); font-size: 12px; max-width: 90ch; }
+footer a { color: var(--pred); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Graph WaveNet traffic forecast on Los Angeles highways</h1>
+    <p class="sub">A trained Graph WaveNet predicts speeds at 207 highway sensors (METR-LA) from the previous hour of readings. Pick a sensor, choose how far ahead to forecast, and knock out sensors to see how the forecast holds up.</p>
+  </header>
+
+  <div class="main">
+    <div class="panel rail">
+      <label class="f" for="sensor">Sensor
+        <select id="sensor"></select>
+      </label>
+      <div class="f" style="display:flex;flex-direction:column;gap:6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">
+        Forecast horizon
+        <div class="seg" id="hseg" role="group" aria-label="Forecast horizon"></div>
+      </div>
+      <label class="f" for="mask">Sensors missing
+        <input type="range" id="mask" min="0" max="5" step="1" value="0">
+        <span class="val" id="maskval">0% of sensors silent</span>
+      </label>
+      <p class="note">With sensors missing, a random share of the 207 sensors send zeros instead of readings for each input window. The model has to fill the gap from the sensors that still report.</p>
+    </div>
+
+    <div class="panel chartbox">
+      <div class="chartbar">
+        <div class="legend">
+          <span><i style="border-color:var(--actual)"></i>Measured speed</span>
+          <span><i style="border-color:var(--pred)" id="predkey"></i><span id="predlabel">Forecast</span></span>
+        </div>
+        <div class="note" id="winnote"></div>
+      </div>
+      <svg id="chart" role="img" aria-label="Measured and forecast speed over two days"></svg>
+      <div class="readout" id="readout">Move over the chart to read a time.</div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="panel card">
+      <h2>Error in this view</h2>
+      <div class="big" id="winmae">–<small>mph MAE</small></div>
+      <p class="note" id="winnote2"></p>
+    </div>
+    <div class="panel card">
+      <h2>Whole test set, all horizons</h2>
+      <div id="bars"></div>
+      <p class="note" style="margin-top:8px">Mean absolute error in mph over every test window and all 12 forecast steps, at each share of silent sensors.</p>
+    </div>
+    <div class="panel card">
+      <h2>Sensors the model relies on</h2>
+      <table id="nbr"></table>
+      <p class="note" style="margin-top:8px">Strongest links in the learned adjacency matrix for the selected sensor. Weights sum to 1 across all 207 sensors, so an even spread would give each about 0.005; higher values mark stronger learned links.</p>
+    </div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = __DATA__;
+const T = DATA.times.length;
+const SVGNS = "http://www.w3.org/2000/svg";
+const state = { sensor: 0, hi: 1, mask: 0 };
+const H = DATA.horizons_steps, MASKS = [0, 10, 20, 30, 40, 50];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const selS = document.getElementById("sensor");
+DATA.sensors.forEach((s, i) => {
+  const o = document.createElement("option");
+  const nb = DATA.actual[i].filter(v => v > 0);
+  const mean = nb.reduce((a, b) => a + b, 0) / nb.length;
+  o.value = i; o.textContent = s.id + " \u00b7 avg " + mean.toFixed(0) + " mph";
+  selS.appendChild(o);
+});
+const hseg = document.getElementById("hseg");
+H.forEach((h, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = (h * DATA.step_minutes) + " min";
+  b.setAttribute("aria-pressed", i === state.hi);
+  b.addEventListener("click", () => { state.hi = i; render(); });
+  hseg.appendChild(b);
+});
+selS.addEventListener("change", () => { state.sensor = +selS.value; render(); });
+document.getElementById("mask").addEventListener("input", e => { state.mask = +e.target.value; render(); });
+
+let W = 860, HT = 340;
+const PL = 40, PR = 12, PT = 18, PB = 30;
+const xs = k => PL + (W - PL - PR) * k / (T - 1);
+const YMAX = 80;
+const ys = v => PT + (HT - PT - PB) * (1 - v / YMAX);
+
+function el(n, a, p) { const e = document.createElementNS(SVGNS, n); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+
+function path(series, color, width, dash) {
+  let d = "", pen = false;
+  series.forEach((v, k) => {
+    if (v === null || v === 0 || v === undefined) { pen = false; return; }
+    d += (pen ? "L" : "M") + xs(k).toFixed(1) + " " + ys(v).toFixed(1); pen = true;
+  });
+  return el("path", { d, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round", "stroke-dasharray": dash || "" });
+}
+
+let hoverK = null;
+function render() {
+  document.querySelectorAll("#hseg button").forEach((b, i) => b.setAttribute("aria-pressed", i === state.hi));
+  const m = MASKS[state.mask], h = H[state.hi], hk = String(h);
+  const act = DATA.actual[state.sensor];
+  const pred = DATA.pred[String(m)][hk][state.sensor];
+  document.getElementById("maskval").textContent = m === 0 ? "No sensors silent" : m + "% of sensors silent";
+  const predColor = m === 0 ? css("--pred") : css("--masked");
+  document.getElementById("predkey").style.borderColor = predColor;
+  document.getElementById("predlabel").textContent = (h * DATA.step_minutes) + "-minute-ahead forecast" + (m ? ", " + m + "% sensors silent" : "");
+
+  const svg = document.getElementById("chart");
+  svg.innerHTML = "";
+  W = Math.max(280, Math.round(svg.parentNode.clientWidth));
+  HT = Math.round(Math.max(230, Math.min(380, W * 0.42)));
+  svg.setAttribute("viewBox", "0 0 " + W + " " + HT);
+  svg.setAttribute("height", HT);
+  for (let v = 0; v <= YMAX; v += 20) {
+    el("line", { x1: PL, x2: W - PR, y1: ys(v), y2: ys(v), stroke: css("--grid"), "stroke-width": 1 }, svg);
+    const t = el("text", { x: PL - 8, y: ys(v) + 4, "text-anchor": "end", "font-size": 11, fill: css("--muted"), "font-family": "IBM Plex Mono, monospace" }, svg);
+    t.textContent = v;
+  }
+  const yl = el("text", { x: PL, y: PT - 2, "font-size": 11, fill: css("--muted"), "font-family": "IBM Plex Mono, monospace" }, svg); yl.textContent = "mph";
+  const dn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  DATA.times.forEach((ts, k) => {
+    const hh = +ts.slice(11, 13), mm = +ts.slice(14, 16);
+    if (mm === 0 && hh % (W < 520 ? 12 : 6) === 0) {
+      el("line", { x1: xs(k), x2: xs(k), y1: PT, y2: HT - PB, stroke: css("--grid"), "stroke-width": hh === 0 ? 1.5 : 1 }, svg);
+      const t = el("text", { x: xs(k), y: HT - PB + 16, "text-anchor": "middle", "font-size": 11, fill: css("--muted"), "font-family": "IBM Plex Mono, monospace" }, svg);
+      const day = dn[new Date(ts.slice(0, 10) + "T12:00:00").getDay()];
+      t.textContent = hh === 0 ? day : String(hh).padStart(2, "0") + ":00";
+    }
+  });
+  svg.appendChild(path(act, css("--actual"), 1.6));
+  svg.appendChild(path(pred, predColor, 1.8));
+  if (hoverK !== null) {
+    el("line", { x1: xs(hoverK), x2: xs(hoverK), y1: PT, y2: HT - PB, stroke: css("--muted"), "stroke-width": 1, "stroke-dasharray": "3 3" }, svg);
+    if (act[hoverK] > 0) el("circle", { cx: xs(hoverK), cy: ys(act[hoverK]), r: 3.5, fill: css("--actual") }, svg);
+    if (pred[hoverK] != null) el("circle", { cx: xs(hoverK), cy: ys(pred[hoverK]), r: 3.5, fill: predColor }, svg);
+  }
+  const ro = document.getElementById("readout");
+  if (hoverK === null) ro.textContent = "Move over the chart to read a time.";
+  else {
+    const p = pred[hoverK], a = act[hoverK];
+    ro.innerHTML = "<b>" + DATA.times[hoverK].slice(5, 16).replace("-", "/") + "</b>  measured <b>" + (a > 0 ? a.toFixed(1) : "n/a") + "</b> mph  forecast <b>" + (p != null ? p.toFixed(1) : "n/a") + "</b> mph" + (p != null && a > 0 ? "  error <b>" + Math.abs(p - a).toFixed(1) + "</b>" : "");
+  }
+
+  // readouts
+  const wm = DATA.window_mae[String(m)][hk];
+  document.getElementById("winmae").innerHTML = wm.toFixed(2) + "<small>mph MAE</small>";
+  document.getElementById("winnote2").textContent = "Averaged over the 12 sensors shown and these 48 hours, forecasting " + (h * DATA.step_minutes) + " minutes ahead" + (m ? " with " + m + "% of sensors silent." : ".");
+  document.getElementById("winnote").textContent = DATA.times[0].slice(0, 10) + " to " + DATA.times[T - 1].slice(0, 10) + ", test period";
+
+  const maxv = Math.max(...MASKS.map(x => DATA.summary_full_test[String(x)].mae));
+  document.getElementById("bars").innerHTML = MASKS.map(x => {
+    const v = DATA.summary_full_test[String(x)].mae;
+    return '<div class="brow' + (x === m ? " on" : "") + '"><span>' + x + '%</span><span class="t"><span style="width:' + (100 * v / maxv).toFixed(0) + '%"></span></span><span>' + v.toFixed(2) + "</span></div>";
+  }).join("");
+
+  const nbrs = DATA.learned_neighbors[String(DATA.sensors[state.sensor].idx)];
+  document.getElementById("nbr").innerHTML = '<tr><th>Sensor</th><th>Weight</th></tr>' + nbrs.map(n => "<tr><td>" + n.id + "</td><td>" + n.w.toFixed(3) + "</td></tr>").join("");
+}
+
+const svgEl = document.getElementById("chart");
+function moveTo(ev) {
+  const r = svgEl.getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width * W;
+  const k = Math.round((x - PL) / (W - PL - PR) * (T - 1));
+  hoverK = k >= 0 && k < T ? k : null;
+  render();
+}
+svgEl.addEventListener("pointermove", moveTo);
+svgEl.addEventListener("pointerdown", moveTo);
+svgEl.addEventListener("pointerleave", () => { hoverK = null; render(); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+window.addEventListener("resize", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+document.getElementById("foot").innerHTML =
+  "Model: Graph WaveNet (Wu et al., IJCAI 2019), trained and evaluated in PyTorch on METR-LA, which holds 5-minute speed readings from 207 loop detectors on Los Angeles County highways. " +
+  "Predictions come from checkpoint " + DATA.checkpoint + " on the held-out test period; nothing is computed in the browser. " +
+  "Sensors are the 12 with the most speed variation over the 48 hours shown. Silent sensors are drawn at random with a fixed seed.";
+render();
+</script>

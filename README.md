@@ -82,6 +82,7 @@ checkpoint/                trained weights used for the export (1.2 MB)
 - Data: METR-LA, 5-minute speed readings from 207 loop detectors on Los Angeles County highways, as prepared by
   Li et al., *Diffusion Convolutional Recurrent Neural Network*, ICLR 2018. The raw data is not included here.
 - The checkpoint was trained for a course project (UCI EECS 298E, Winter 2026).
+- This viewer was built with AI assistance (Claude).
 
 ## License
 

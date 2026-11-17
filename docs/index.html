@@ -37,7 +37,8 @@ body {
 }
 .wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
-.sub { color: var(--muted); max-width: 70ch; margin: 4px 0 0; }
+.by { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.sub { color: var(--muted); max-width: 70ch; margin: 8px 0 0; }
 .main { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; min-width: 0; }
@@ -85,6 +86,7 @@ footer a { color: var(--pred); }
 <div class="wrap">
   <header>
     <h1>Graph WaveNet traffic forecast on Los Angeles highways</h1>
+    <p class="by">Built by Jiajie Su</p>
     <p class="sub">A trained Graph WaveNet predicts speeds at 207 highway sensors (METR-LA) from the previous hour of readings. Pick a sensor, choose how far ahead to forecast, and knock out sensors to see how the forecast holds up.</p>
   </header>
 
@@ -263,7 +265,8 @@ new MutationObserver(render).observe(document.documentElement, { attributes: tru
 document.getElementById("foot").innerHTML =
   "Model: Graph WaveNet (Wu et al., IJCAI 2019), trained and evaluated in PyTorch on METR-LA, which holds 5-minute speed readings from 207 loop detectors on Los Angeles County highways. " +
   "Predictions come from checkpoint " + DATA.checkpoint + " on the held-out test period; nothing is computed in the browser. " +
-  "Sensors are the 12 with the most speed variation over the 48 hours shown. Silent sensors are drawn at random with a fixed seed.";
+  "Sensors are the 12 with the most speed variation over the 48 hours shown. Silent sensors are drawn at random with a fixed seed. " +
+  "Viewer and data export by Jiajie Su.";
 render();
 </script>
 

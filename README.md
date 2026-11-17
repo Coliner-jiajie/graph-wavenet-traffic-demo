@@ -1,7 +1,7 @@
 # Graph WaveNet traffic forecast viewer
 
 An interactive page that shows what a trained [Graph WaveNet](https://arxiv.org/abs/1906.00121) predicts for highway
-traffic in Los Angeles, next to the speeds that were actually measured.
+traffic in Los Angeles, next to the speeds that were actually measured. Built by Jiajie Su.
 
 ![Viewer screenshot](docs/screenshot.png)
 

@@ -81,6 +81,7 @@ checkpoint/                trained weights used for the export (1.2 MB)
   Li et al., *Diffusion Convolutional Recurrent Neural Network*, ICLR 2018. The raw data is not included here.
 - The checkpoint was trained for a course project (UCI EECS 298E, Winter 2026).
 
-## Not yet decided
+## License
 
-No license has been chosen for this repository's own code.
+MIT, see `LICENSE`. This covers the viewer, the scripts and the exported data files. The Graph WaveNet model code
+is separate and carries its own MIT license from its authors. METR-LA data keeps the terms of its original release.

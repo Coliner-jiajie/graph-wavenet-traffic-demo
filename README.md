@@ -3,6 +3,8 @@
 An interactive page that shows what a trained [Graph WaveNet](https://arxiv.org/abs/1906.00121) predicts for highway
 traffic in Los Angeles, next to the speeds that were actually measured. Built by Jiajie Su.
 
+**Live demo: https://coliner-jiajie.github.io/graph-wavenet-traffic-demo/**
+
 ![Viewer screenshot](docs/screenshot.png)
 
 The model forecasts speed at 207 loop-detector sensors (the METR-LA dataset) from the previous hour of readings.
@@ -33,7 +35,7 @@ Wednesday 2012-06-20), so errors for the selected view are higher than the whole
 
 ## Run it
 
-Open `docs/index.html` in any browser, or serve the folder:
+Use the live page above, open `docs/index.html` in any browser, or serve the folder:
 
 ```
 python3 -m http.server 8765 --directory docs

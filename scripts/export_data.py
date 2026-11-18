@@ -9,6 +9,8 @@ Usage (needs PyTorch, numpy, pandas, tables):
     python scripts/export_data.py            # fast: reuses data/full_test_summary.json
     python scripts/export_data.py --full     # recompute whole-test-set MAE for every mask level (about 15 min on CPU)
 
+Needs data/sensor_locations.csv (run scripts/fetch_locations.py once).
+
 Environment variables:
     GWNET_REPO   path to the Graph-WaveNet clone      (default ../Graph-WaveNet next to this project)
     GWNET_CKPT   checkpoint to evaluate               (default checkpoint/metr_exp1_best_2.71.pth in this project)
@@ -112,12 +114,15 @@ for i in range(0, N - STEPS - 24):
 win_lo, win_hi = start, start + STEPS + 12
 print("window", target_time(start, 1), "->", target_time(start + STEPS - 1, 1))
 
-# ---- sensors: complete data, most variation ----
-act = real_all[win_lo:win_lo + STEPS, 0, :]
-valid, var = (act != 0).mean(axis=0), act.std(axis=0)
-cand = np.where(valid > 0.98)[0]
-sel = list(cand[np.argsort(-var[cand])][:12])
-print("sensors", sel)
+# ---- all 207 sensors, with map coordinates ----
+import base64
+import csv
+
+loc = {r["sensor_id"]: (float(r["latitude"]), float(r["longitude"]))
+       for r in csv.DictReader(open(ROOT / "data" / "sensor_locations.csv"))}
+sel = list(range(207))
+act = real_all[win_lo:win_lo + STEPS, 0, :]                       # horizon-1 ground truth over the window
+avg = [float(act[:, s][act[:, s] != 0].mean()) if (act[:, s] != 0).any() else 0.0 for s in sel]
 
 # ---- learned adjacency neighbours ----
 with torch.no_grad():
@@ -126,39 +131,40 @@ neighbors = {}
 for s in sel:
     row = adp[s].copy()
     row[s] = -1
-    neighbors[str(int(s))] = [{"idx": int(t), "id": str(sensor_ids[t]), "w": round(float(adp[s][t]), 4)}
-                              for t in np.argsort(-row)[:5]]
+    neighbors[str(s)] = [{"idx": int(t), "id": str(sensor_ids[t]), "w": round(float(adp[s][t]), 4)}
+                         for t in np.argsort(-row)[:5]]
+
+
+def pack(arr):
+    """(sensors, STEPS) float array -> base64 of little-endian int16 tenths of mph; -1 marks a missing value."""
+    a = np.where(np.isnan(arr) | (arr <= 0), -1, np.round(arr * 10)).astype("<i2")
+    return base64.b64encode(a.tobytes()).decode("ascii")
+
 
 # ---- series ----
-actual = [[round(float(real_all[win_lo + k, 0, s]), 1) for k in range(STEPS)] for s in sel]
+actual = pack(act.T.astype(float))
 preds = {}
 for r in RATES:
-    p = predict(win_lo, win_hi, r, seed=7)
-    preds[str(int(r * 100))] = {
-        str(h): [[None if k - (h - 1) < 0 else round(float(p[k - (h - 1), h - 1, s]), 1) for k in range(STEPS)]
-                 for s in sel]
-        for h in HORIZONS
-    }
-
-window_mae = {}
-a = np.array(actual, dtype=float)
-for mk, per_h in preds.items():
-    window_mae[mk] = {}
-    for hk, ser in per_h.items():
-        pp = np.array([[np.nan if v is None else v for v in row] for row in ser], dtype=float)
-        m = (a != 0) & ~np.isnan(pp)
-        window_mae[mk][hk] = round(float(np.abs(pp[m] - a[m]).mean()), 3)
+    p = predict(win_lo, win_hi, r, seed=7)                        # (STEPS + 12, 12, 207)
+    per_h = {}
+    for h in HORIZONS:
+        m = np.full((207, STEPS), np.nan)
+        for k in range(h - 1, STEPS):                              # forecast for time k was made h steps earlier
+            m[:, k] = p[k - (h - 1), h - 1, :]
+        per_h[str(h)] = pack(m)
+    preds[str(int(r * 100))] = per_h
 
 OUT.write_text(json.dumps({
     "checkpoint": CKPT.name,
     "summary_full_test": summary,
     "horizons_steps": HORIZONS,
     "step_minutes": 5,
+    "steps": STEPS,
     "times": [target_time(win_lo + k, 1).strftime("%Y-%m-%d %H:%M") for k in range(STEPS)],
-    "sensors": [{"idx": int(s), "id": str(sensor_ids[s])} for s in sel],
+    "sensors": [{"idx": s, "id": str(sensor_ids[s]), "lat": loc[str(sensor_ids[s])][0], "lon": loc[str(sensor_ids[s])][1],
+                 "avg": round(avg[s], 1)} for s in sel],
     "actual": actual,
     "pred": preds,
-    "window_mae": window_mae,
     "learned_neighbors": neighbors,
 }, separators=(",", ":")))
-print("wrote", OUT)
+print("wrote", OUT, f"({OUT.stat().st_size / 1e6:.1f} MB)")
